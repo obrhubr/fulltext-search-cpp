@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+    server:
+        image: nikl/fts
+        ports: 
+            - 1984:1984
+        volumes:
+            - db:/usr/src/app/db
+
+networks:
+    default:
+
+volumes:
+    db:
+        driver: local
