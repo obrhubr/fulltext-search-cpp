@@ -6,10 +6,27 @@
 #include <iterator>
 #include <algorithm>
 
+// struct to make passing around the results between functions easier
 struct searchResult {
     std::string bookId;
     int pos;
     std::string periText;
+};
+
+struct searchResults {
+    int errorCode;
+    std::vector<searchResult> results;
+};
+
+// struct to make passing around rows returned from SQL queries easier
+struct SQLRow {
+    std::vector<std::string> row;
+};
+
+// struct to make passing results returned from SQL queries easier
+struct SQLResults {
+    int errorCode;
+    std::vector<SQLRow> results;
 };
 
 static int callback(void *NotUsed, int argc, char **argv, char **azColName)
@@ -55,6 +72,7 @@ int executePreparedStatement(sqlite3 *db, std::string sql, std::string *argument
 
     sqlite3_finalize(stmt);
 
+    // Check for errors
     if (SQLITE_DONE != rc)
     {
         return 1;
@@ -67,7 +85,7 @@ int executePreparedStatement(sqlite3 *db, std::string sql, std::string *argument
     return rc;
 }
 
-std::pair<std::vector<std::vector<std::string>>, int> getResultsFromPreparedStatement(sqlite3 *db, std::string sql, std::string *arguments)
+SQLResults getResultsFromPreparedStatement(sqlite3 *db, std::string sql, std::string *arguments)
 {
     // Function used to simplify making prepared statements and reading results
     // @param: db - the database
@@ -75,6 +93,7 @@ std::pair<std::vector<std::vector<std::string>>, int> getResultsFromPreparedStat
     // @param: arguments - list of arguments to replace placeholders with
     sqlite3_stmt *stmt;
 
+    // Prepare sql statement and bind the arguments to it
     sqlite3_prepare_v2(
         db,
         sql.c_str(),
@@ -93,13 +112,13 @@ std::pair<std::vector<std::vector<std::string>>, int> getResultsFromPreparedStat
     };
 
     // vector storing the rows returned
-    std::vector<std::vector<std::string>> results;
+    std::vector<SQLRow> results;
 
     while (sqlite3_step(stmt) != SQLITE_DONE)
     {
         int i;
         int num_cols = sqlite3_column_count(stmt);
-        std::vector<std::string> curCol;
+        SQLRow curCol;
 
         for (i = 0; i < num_cols; i++)
         {
@@ -107,19 +126,23 @@ std::pair<std::vector<std::vector<std::string>>, int> getResultsFromPreparedStat
             switch (sqlite3_column_type(stmt, i))
             {
             case (SQLITE3_TEXT):
-                curCol.push_back(std::string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, i))));
+                // Push the returned text to the current row
+                curCol.row.push_back(std::string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, i))));
                 break;
             default:
                 break;
             };
         }
 
+        // Push the row into the results vector
         results.push_back(curCol);
     }
 
     sqlite3_finalize(stmt);
 
-    std::pair<std::vector<std::vector<std::string>>, int> res = {results, 0};
+    SQLResults res;
+    res.results = results;
+    res.errorCode = 0;
 
     return res;
 }
@@ -138,7 +161,7 @@ int createTable(sqlite3 *db)
     return rc;
 }
 
-std::pair<std::vector<std::vector<std::string>>, int> getBook(sqlite3 *db, std::string bookId)
+SQLResults getBook(sqlite3 *db, std::string bookId)
 {
     // Function to search for a book in the database
     // @param: db - the database
@@ -153,7 +176,7 @@ std::pair<std::vector<std::vector<std::string>>, int> getBook(sqlite3 *db, std::
     return res;
 };
 
-std::pair<std::vector<std::vector<std::string>>, int> getAllBooks(sqlite3 *db)
+SQLResults getAllBooks(sqlite3 *db)
 {
     // Function to get all books in the database
     // @param: db - the database
@@ -217,6 +240,10 @@ int removeBook(sqlite3 *db, std::string bookId)
 // for string delimiter
 std::vector<std::string> split(std::string s, std::string delimiter)
 {
+    // Function to remove string delimiter copied from stackoverflow
+    // @param: s - the string to split
+    // @param: delimiter - the string to split at
+
     size_t pos_start = 0, pos_end, delim_len = delimiter.length();
     std::string token;
     std::vector<std::string> res;
@@ -234,6 +261,9 @@ std::vector<std::string> split(std::string s, std::string delimiter)
 
 std::string normaliseWord(std::string word)
 {
+    // Function to normalise text : remove punctuation, make lowercase
+    // @param: word - the word to normalise
+
     std::string result;
 
     for (auto c : word)
@@ -245,20 +275,79 @@ std::string normaliseWord(std::string word)
     return result;
 }
 
-bool checkWords(std::vector<std::string> words, std::vector<std::string> splitSearchText)
+bool checkMatch(std::string normalisedWord, std::string normalisedSearch) {
+    // Check if words are longer than 0
+    if(normalisedWord.size() == 0 || normalisedSearch.size() == 0)
+    {
+        return false;
+    }
+
+    // Check normalised versions of each word against each other
+    if (normalisedWord == normalisedSearch) return true;
+
+    // Check if normalisedSearch is contained within normalisedWord
+    if(normalisedWord.size() > 4)
+    {
+        if(abs(normalisedSearch.size() - normalisedWord.size()) < 3)
+        {
+            if (normalisedWord.find(normalisedSearch) != std::string::npos)
+            {
+                return true;
+            };
+        };
+
+        if(abs(normalisedSearch.size() - normalisedWord.size()) < 3)
+        {
+            if (normalisedSearch.find(normalisedWord) != std::string::npos)
+            {
+                return true;
+            };
+        };
+    };
+
+    return false;
+}
+
+bool checkMutations(std::string normalisedWord, std::string normalisedSearch) {
+    // Check if mutations of normalisedSearch match
+    std::string alphabet = "abcdefghijklmnopqrstuvwxyz";
+    for(int i = 0; i < normalisedSearch.size(); i++) {
+        // 27 not 26, to replace by nothing too
+        for(int j = 0; j < 27; j++) {
+            auto mutatedSearch = normalisedSearch;
+
+            if (checkMatch(normalisedWord, mutatedSearch.replace(i, 1, alphabet.substr(j, 1)))) return true;
+        }
+    }
+    return false;
+}
+
+bool checkWords(std::vector<std::string> splitTextWordList, std::vector<std::string> splitSearchText)
 {
     int correctWords = 0;
 
-    for (int i = 0; i < words.size(); i++)
+    // Loop through all the words
+    for (int i = 0; i < splitTextWordList.size(); i++)
     {
-        auto normalisedWord = normaliseWord(words[i]);
+        // normalise both words to maximise chances of a match
+        auto normalisedWord = normaliseWord(splitTextWordList[i]);
         auto normalisedSearch = normaliseWord(splitSearchText[i]);
 
-        if (normalisedWord == normalisedSearch)
-            correctWords += 1;
+        if(checkMatch(normalisedWord, normalisedSearch))
+        {
+            correctWords++;
+            continue;
+        }
+
+        if(checkMutations(normalisedWord, normalisedSearch))
+        {
+            correctWords++;
+            continue;
+        }
     }
 
-    if (correctWords == words.size())
+    // The number of matching words has to be the same as the number of words in the search query
+    if (correctWords == splitTextWordList.size())
     {
         return true;
     }
@@ -266,27 +355,27 @@ bool checkWords(std::vector<std::string> words, std::vector<std::string> splitSe
     return false;
 }
 
-std::pair<std::vector<searchResult>, int> searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne)
+searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne)
 {
     // Function to search for text in a single book
     // @param: db - the database
     // @param: bookId - the id of the book
     // @param: searchText - the text to search for
     // @param: stopAfterOne - argument specifying if function should continue to search after it found first result
-    auto res = getBook(db, bookId);
+    SQLResults res = getBook(db, bookId);
 
-    std::pair<std::vector<searchResult>, int> searchResults;
+    searchResults sRes;
 
-    if (res.second == 1) {
-        searchResults.second = 1;
-        return searchResults;
+    if (res.errorCode == 1) {
+        sRes.errorCode = 1;
+        return sRes;
     }        
-    if (res.first.size() == 0) {
-        searchResults.second = 0;
-        return searchResults;
+    if (res.results.size() == 0) {
+        sRes.errorCode = 0;
+        return sRes;
     }
 
-    std::string text = res.first[0][2];
+    std::string text = res.results[0].row[2];
 
     auto splitText = split(text, " ");
     auto splitTextLength = splitText.size();
@@ -298,7 +387,7 @@ std::pair<std::vector<searchResult>, int> searchBook(sqlite3 *db, std::string bo
     for (int i = 0; i < splitText.size(); i++)
     {
         // Create list of next words to come
-        std::vector<std::string> wordList;
+        std::vector<std::string> splitTextWordList;
         for (int j = 0; j < searchTextLength; j++)
         {
             if (i + j >= splitTextLength)
@@ -307,37 +396,37 @@ std::pair<std::vector<searchResult>, int> searchBook(sqlite3 *db, std::string bo
                 break;
             }
 
-            wordList.push_back(splitText[i + j]);
+            splitTextWordList.push_back(splitText[i + j]);
         }
 
         if (stop)
             break;
 
         // Check if words match by using function to have easy expandability
-        if (checkWords(wordList, splitSearchText))
+        if (checkWords(splitTextWordList, splitSearchText))
         {
-            std::string wordListStr = "";
-            for (auto word : wordList)
+            std::string splitTextWordListStr = "";
+            for (auto word : splitTextWordList)
             {
-                wordListStr += word;
-                wordListStr += " ";
+                splitTextWordListStr += word;
+                splitTextWordListStr += " ";
             }
-            searchResult sR{bookId, i, wordListStr};
-            searchResults.first.push_back(sR);
+            searchResult sR{bookId, i, splitTextWordListStr};
+            sRes.results.push_back(sR);
 
             if (stopAfterOne)
             {
-                searchResults.second = 0;
-                return searchResults;
+                sRes.errorCode = 0;
+                return sRes;
             }
         }
     }
 
-    searchResults.second = 0;
-    return searchResults;
+    sRes.errorCode = 0;
+    return sRes;
 };
 
-std::pair<std::vector<searchResult>, int> searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne)
+searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne)
 {
     // Function to search for text in all book
     // @param: db - the database
@@ -345,31 +434,31 @@ std::pair<std::vector<searchResult>, int> searchAllBooks(sqlite3 *db, std::strin
     // @param: stopAfterOne - argument specifying if function should continue to search after it found first result
     auto res = getAllBooks(db);
 
-    std::pair<std::vector<searchResult>, int> searchResults;
+    searchResults searchResults;
 
-    if(res.second == 1) {
-        searchResults.second = 1;
+    if(res.errorCode == 1) {
+        searchResults.errorCode = 1;
         return searchResults;
     }
-    if(res.first.size() == 0) {
-        searchResults.second = 0;
+    if(res.results.size() == 0) {
+        searchResults.errorCode = 0;
         return searchResults;
     }
 
-    for (auto bookId : res.first)
+    for (auto bookId : res.results)
     {
-        auto res = searchBook(db, bookId[0], searchText, stopAfterOne);
-        if(res.second == 1) {
-            res.second = 1;
+        auto res = searchBook(db, bookId.row[0], searchText, stopAfterOne);
+        if(res.errorCode == 1) {
+            res.errorCode = 1;
             return searchResults;
         }
-        if (res.first.size() > 0)
+        if (res.results.size() > 0)
         {
-            std::copy(res.first.begin(), res.first.end(), std::back_inserter(searchResults.first));
+            std::copy(res.results.begin(), res.results.end(), std::back_inserter(searchResults.results));
         }
     }
 
-    searchResults.second = 0;
+    searchResults.errorCode = 0;
     return searchResults;
 };
 

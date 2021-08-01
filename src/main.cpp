@@ -72,12 +72,12 @@ void edit_handler(const std::shared_ptr<Session> session)
         if(req["bookId"].is_string()) {
             if(req["bookName"].is_null() || req["text"].is_null()) {
                 auto bookData = getBook(db, req["bookId"]);
-                if(bookData.second == 0) {
+                if(bookData.errorCode == 0) {
                     if(req["bookName"].is_null()) {
-                        req["bookName"] = bookData.first[0][1];
+                        req["bookName"] = bookData.results[0].row[1];
                     };
                     if(req["text"].is_null()) {
-                        req["text"] = bookData.first[0][2];
+                        req["text"] = bookData.results[0].row[2];
                     };
                 } else {
                     res = "{\"response\": \"Error while querying database. \"}";
@@ -156,13 +156,13 @@ void search_one_handler(const std::shared_ptr<Session> session)
             std::cout << "Searching book in sqlite, with term: " << req["searchText"] << std::endl;
             auto rc = searchBook(db, req["bookId"], req["searchText"], req["stopAfterOne"]);
 
-            if (rc.second == 0)
+            if (rc.errorCode == 0)
             {
                 json searchRes;
 
                 searchRes["results"] = {};
 
-                for(auto sres : rc.first) {
+                for(auto sres : rc.results) {
                     json searchInfo;
                     searchInfo["bookId"] = sres.bookId;
                     searchInfo["word"] = sres.pos;
@@ -173,10 +173,13 @@ void search_one_handler(const std::shared_ptr<Session> session)
                 res = searchRes.dump();
             } else {
                 res = "{\"response\": \"Error while searching book in the database. \"}";
+                session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+                return;
             }
         } else {
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+            return;
         }
 
         session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
@@ -195,17 +198,17 @@ void search_all_handler(const std::shared_ptr<Session> session)
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
-        if(req["bookId"].is_string() && req["searchText"].is_string() && req["stopAfterOne"].is_string()) {
+        if(req["searchText"].is_string() && req["stopAfterOne"].is_boolean()) {
             std::cout << "Searching all books in sqlite, with term: " << req["searchText"] << std::endl;
             auto rc = searchAllBooks(db, req["searchText"], req["stopAfterOne"]);
             
-            if (rc.second == 0)
+            if (rc.errorCode == 0)
             {
                 json searchRes;
 
                 searchRes["results"] = {};
 
-                for(auto sres : rc.first) {
+                for(auto sres : rc.results) {
                     json searchInfo;
                     searchInfo["bookId"] = sres.bookId;
                     searchInfo["word"] = sres.pos;
@@ -216,10 +219,14 @@ void search_all_handler(const std::shared_ptr<Session> session)
                 res = searchRes.dump();
             } else {
                 res = "{\"response\": \"Error while searching books in the database. \"}";
+                session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+                return;
             }
         } else {
+            std::cout << "Error while validating input." << std::endl;
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+            return;
         }
 
         session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
