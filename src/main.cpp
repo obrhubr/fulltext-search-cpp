@@ -149,6 +149,8 @@ void removeAll_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        std::string res = " ";
+        
         std::cout << "Removing all books from sqlite. " << std::endl;
         int rc = removeAllBooks(db);
 
