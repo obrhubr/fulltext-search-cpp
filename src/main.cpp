@@ -13,6 +13,9 @@
 using namespace restbed;
 using json = nlohmann::json;
 
+// create metrics counter
+json metrics;
+
 // make db a global variable to access it inside route handlers
 sqlite3 *db;
 
@@ -34,6 +37,8 @@ void add_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        metrics["add_count"] = metrics["add_count"].get<int>() + 1;
+
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
@@ -66,6 +71,8 @@ void edit_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        metrics["edit_count"] = metrics["edit_count"].get<int>() + 1;
+
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
@@ -115,6 +122,8 @@ void remove_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        metrics["remove_count"] = metrics["remove_count"].get<int>() + 1;
+
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
@@ -176,6 +185,8 @@ void search_one_handler(const std::shared_ptr<Session> session)
 
     session->fetch((size_t)length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        metrics["search_one_count"] = metrics["search_one_count"].get<int>() + 1;
+
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
@@ -223,6 +234,8 @@ void search_all_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
+        metrics["search_all_count"] = metrics["search_all_count"].get<int>() + 1;
+
         auto req = json::parse(getJsonBody(body));
         std::string res = " ";
 
@@ -262,6 +275,28 @@ void search_all_handler(const std::shared_ptr<Session> session)
     });
 };
 
+void metrics_handler(const std::shared_ptr<Session> session)
+{
+    const auto request = session->get_request();
+
+    auto length = 0;
+    request->get_header("Content-Length", length);
+
+    session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
+    {
+        std::string res = " ";
+
+        res += "http_request_duration_seconds_count{path=\"/add\",project_name=\"fts\"} " + metrics["add_count"].dump() + "\n";
+        res += "http_request_duration_seconds_count{path=\"/edit\",project_name=\"fts\"} " + metrics["edit_count"].dump() + "\n";
+        res += "http_request_duration_seconds_count{path=\"/remove\",project_name=\"fts\"} " + metrics["remove_count"].dump() + "\n";
+        res += "http_request_duration_seconds_count{path=\"/search/all\",project_name=\"fts\"} " + metrics["search_all_count"].dump() + "\n";
+        res += "http_request_duration_seconds_count{path=\"/search/one\",project_name=\"fts\"} " + metrics["search_one_count"].dump() + "\n";
+
+        res += "up{project_name{\"fts\"} 1";
+
+        session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "text/plain"}});
+    });
+};
 
 int main(const int, const char **)
 {
@@ -305,10 +340,24 @@ int main(const int, const char **)
     search_all_resource->set_method_handler("POST", search_all_handler);
     service.publish(search_all_resource);
 
+    // route to search text in all books
+    auto metrics_resource = std::make_shared<Resource>();
+    metrics_resource->set_path("/metrics");
+    metrics_resource->set_method_handler("GET", metrics_handler);
+    service.publish(metrics_resource);
+    
+
     // Set up server
     auto settings = std::make_shared<Settings>();
     settings->set_port(1984);
     settings->set_default_header("Connection", "close");
+
+    // initialise metrics counter
+    metrics["add_count"] = 0;
+    metrics["edit_count"] = 0;
+    metrics["remove_count"] = 0;
+    metrics["search_all_count"] = 0;
+    metrics["search_one_count"] = 0;
 
     // Create and start server
     std::cout << "Starting server on port: " << settings->get_port() << std::endl;;
