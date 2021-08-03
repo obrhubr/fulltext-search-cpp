@@ -237,6 +237,19 @@ int removeBook(sqlite3 *db, std::string bookId)
     return rc;
 };
 
+int removeAllBooks(sqlite3 *db)
+{
+    // Function to remove all books
+    // @param: db - the database
+    char *zErrMsg = 0;
+
+    std::string sql = "DELETE FROM fulltext;";
+    std::string arguments[1] = {};
+    int rc = executePreparedStatement(db, sql, arguments);
+
+    return rc;
+};
+
 // for string delimiter
 std::vector<std::string> split(std::string s, std::string delimiter)
 {

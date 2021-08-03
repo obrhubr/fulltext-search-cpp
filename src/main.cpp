@@ -140,6 +140,31 @@ void remove_handler(const std::shared_ptr<Session> session)
     });
 };
 
+void removeAll_handler(const std::shared_ptr<Session> session)
+{
+    const auto request = session->get_request();
+
+    auto length = 0;
+    request->get_header("Content-Length", length);
+
+    session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
+    {
+        std::cout << "Removing all books from sqlite. " << std::endl;
+        int rc = removeAllBooks(db);
+
+        if (rc == 0)
+        {
+            res = "{\"response\": \"Removed all books from the database. \"}";
+        } else {
+            res = "{\"response\": \"Error while removing all books from the database. \"}";
+            session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+            return;
+        }
+
+        session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+    });
+};
+
 void search_one_handler(const std::shared_ptr<Session> session)
 {
     const auto request = session->get_request();
@@ -257,6 +282,12 @@ int main(const int, const char **)
     remove_resource->set_path("/remove");
     remove_resource->set_method_handler("POST", remove_handler);
     service.publish(remove_resource);
+
+    // route to remove all texts
+    auto removeAll_resource = std::make_shared<Resource>();
+    removeAll_resource->set_path("/removeAll");
+    removeAll_resource->set_method_handler("POST", removeAll_handler);
+    service.publish(removeAll_resource);
 
     // route to search text in one book
     auto search_one_resource = std::make_shared<Resource>();
