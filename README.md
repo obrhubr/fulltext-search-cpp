@@ -2,6 +2,10 @@
 
 ### Description
 
+#### Attention
+
+This version is only slower than the master branch if the number of books is low.
+
 This is a webservice, built in C++, offering a simple api to add, edit, remove and search books. I use it in my project [obrhubr/homelibrary](https://www.github.com/obrhubr/homelibrary).
 
 ### Table of Content
