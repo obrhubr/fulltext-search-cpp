@@ -322,41 +322,44 @@ bool checkMatch(std::string normalisedWord, std::string normalisedSearch) {
     return false;
 }
 
-bool checkMutations(std::string normalisedWord, std::string normalisedSearch) {
-    // Check if mutations of normalisedSearch match
+std::vector<std::vector<std::string>> getSearchTextMutations(std::vector<std::string> splitSearchText) {
+    // Return list of mutations for each word in searchText
+    std::vector<std::vector<std::string>> mutations;
+
     std::string alphabet = "abcdefghijklmnopqrstuvwxyz";
-    for(int i = 0; i < normalisedSearch.size(); i++) {
+    for(int i = 0; i < splitSearchText.size(); i++) {
+        std::vector<std::string> wordMutations;
+
+        // Normalise word before mutation
+        auto normalisedSearchWord = normaliseWord(splitSearchText[i]);
+
         // 27 not 26, to replace by nothing too
         for(int j = 0; j < 27; j++) {
-            auto mutatedSearch = normalisedSearch;
+            auto mutatedSearchWord = normalisedSearchWord;
 
-            if (checkMatch(normalisedWord, mutatedSearch.replace(i, 1, alphabet.substr(j, 1)))) return true;
+            wordMutations.push_back(mutatedSearchWord.replace(i, 1, alphabet.substr(j, 1)));
         }
+        mutations.push_back(wordMutations);
     }
-    return false;
+
+    return mutations;
 }
 
-bool checkWords(std::vector<std::string> splitTextWordList, std::vector<std::string> splitSearchText)
+bool checkWords(std::vector<std::string> splitTextWordList, std::vector<std::vector<std::string>> mutationsSplitSearchText)
 {
     int correctWords = 0;
 
     // Loop through all the words
     for (int i = 0; i < splitTextWordList.size(); i++)
     {
-        // normalise both words to maximise chances of a match
         auto normalisedWord = normaliseWord(splitTextWordList[i]);
-        auto normalisedSearch = normaliseWord(splitSearchText[i]);
 
-        if(checkMatch(normalisedWord, normalisedSearch))
-        {
-            correctWords++;
-            continue;
-        }
-
-        if(checkMutations(normalisedWord, normalisedSearch))
-        {
-            correctWords++;
-            continue;
+        for(auto mutatedWord : mutationsSplitSearchText[i]) {
+            if(checkMatch(normalisedWord, mutatedWord))
+            {
+                correctWords++;
+                break;
+            }
         }
     }
 
@@ -396,6 +399,8 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
     auto splitSearchText = split(searchText, " ");
     auto searchTextLength = splitSearchText.size();
 
+    auto mutationsSplitSearchText = getSearchTextMutations(splitSearchText);
+
     bool stop = false;
 
     for (int i = 0; i < splitText.size(); i++)
@@ -417,7 +422,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
             break;
 
         // Check if words match by using function to have easy expandability
-        if (checkWords(splitTextWordList, splitSearchText))
+        if (checkWords(splitTextWordList, mutationsSplitSearchText))
         {
             std::string periText = "";
             int periTextLength = std::max(minPeriTextLength, (int)splitTextWordList.size());
