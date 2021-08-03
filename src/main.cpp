@@ -284,7 +284,7 @@ void metrics_handler(const std::shared_ptr<Session> session)
 
     session->fetch(length, [](const std::shared_ptr<Session> session, const Bytes &body)
     {
-        std::string res = " ";
+        std::string res = "";
 
         res += "http_request_duration_seconds_count{path=\"/add\",project_name=\"fts\"} " + metrics["add_count"].dump() + "\n";
         res += "http_request_duration_seconds_count{path=\"/edit\",project_name=\"fts\"} " + metrics["edit_count"].dump() + "\n";
@@ -292,7 +292,7 @@ void metrics_handler(const std::shared_ptr<Session> session)
         res += "http_request_duration_seconds_count{path=\"/search/all\",project_name=\"fts\"} " + metrics["search_all_count"].dump() + "\n";
         res += "http_request_duration_seconds_count{path=\"/search/one\",project_name=\"fts\"} " + metrics["search_one_count"].dump() + "\n";
 
-        res += "up{project_name{\"fts\"} 1";
+        res += "\nup{project_name=\"fts\"} 1";
 
         session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "text/plain"}});
     });
