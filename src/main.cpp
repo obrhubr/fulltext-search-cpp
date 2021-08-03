@@ -192,6 +192,7 @@ void search_one_handler(const std::shared_ptr<Session> session)
                 for(auto sres : rc.results) {
                     json searchInfo;
                     searchInfo["bookId"] = sres.bookId;
+                    searchInfo["bookName"] = sres.bookName;
                     searchInfo["word"] = sres.pos;
                     searchInfo["periText"] = sres.periText;
                     searchRes["results"].push_back(searchInfo);
@@ -238,6 +239,7 @@ void search_all_handler(const std::shared_ptr<Session> session)
                 for(auto sres : rc.results) {
                     json searchInfo;
                     searchInfo["bookId"] = sres.bookId;
+                    searchInfo["bookName"] = sres.bookName;
                     searchInfo["word"] = sres.pos;
                     searchInfo["periText"] = sres.periText;
                     searchRes["results"].push_back(searchInfo);

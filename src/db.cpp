@@ -9,6 +9,7 @@
 // struct to make passing around the results between functions easier
 struct searchResult {
     std::string bookId;
+    std::string bookName;
     int pos;
     std::string periText;
 };
@@ -424,7 +425,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
                 splitTextWordListStr += word;
                 splitTextWordListStr += " ";
             }
-            searchResult sR{bookId, i, splitTextWordListStr};
+            searchResult sR{bookId, res.results[0].row[1], i, splitTextWordListStr};
             sRes.results.push_back(sR);
 
             if (stopAfterOne)
