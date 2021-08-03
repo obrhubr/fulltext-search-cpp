@@ -2,6 +2,11 @@
 
 ### Description
 
+#### Attention
+
+The branch `memory-intensive` performs better if there are more books since it stores mutations of the search query instead of recomputing them every time.
+
+
 This is a webservice, built in C++, offering a simple api to add, edit, remove and search books. I use it in my project [obrhubr/homelibrary](https://www.github.com/obrhubr/homelibrary).
 
 ### Table of Content
