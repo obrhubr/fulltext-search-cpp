@@ -369,7 +369,7 @@ bool checkWords(std::vector<std::string> splitTextWordList, std::vector<std::str
     return false;
 }
 
-searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne)
+searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne, int minPeriTextLength = 15)
 {
     // Function to search for text in a single book
     // @param: db - the database
@@ -419,13 +419,17 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
         // Check if words match by using function to have easy expandability
         if (checkWords(splitTextWordList, splitSearchText))
         {
-            std::string splitTextWordListStr = "";
-            for (auto word : splitTextWordList)
+            std::string periText = "";
+            int periTextLength = std::max(minPeriTextLength, (int)splitTextWordList.size());
+            for (int j = 0; j < periTextLength; j++)
             {
-                splitTextWordListStr += word;
-                splitTextWordListStr += " ";
+                if((i - (periTextLength / 2) + j) > splitTextLength) {
+                    break;
+                };
+                periText += splitText[i - (periTextLength / 2) + j];
+                periText += " ";
             }
-            searchResult sR{bookId, res.results[0].row[1], i, splitTextWordListStr};
+            searchResult sR{bookId, res.results[0].row[1], i, periText};
             sRes.results.push_back(sR);
 
             if (stopAfterOne)
@@ -440,7 +444,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
     return sRes;
 };
 
-searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne)
+searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne, int minPeriTextLength = 15)
 {
     // Function to search for text in all book
     // @param: db - the database
@@ -461,7 +465,7 @@ searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfter
 
     for (auto bookId : res.results)
     {
-        auto res = searchBook(db, bookId.row[0], searchText, stopAfterOne);
+        auto res = searchBook(db, bookId.row[0], searchText, stopAfterOne, minPeriTextLength);
         if(res.errorCode == 1) {
             res.errorCode = 1;
             return searchResults;
