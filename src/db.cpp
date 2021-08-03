@@ -423,7 +423,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
             int periTextLength = std::max(minPeriTextLength, (int)splitTextWordList.size());
             for (int j = 0; j < periTextLength; j++)
             {
-                if((i - (periTextLength / 2) + j) > splitTextLength) {
+                if((i - (periTextLength / 2) + j) >= splitTextLength) {
                     break;
                 };
                 periText += splitText[i - (periTextLength / 2) + j];
