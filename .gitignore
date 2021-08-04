@@ -1,3 +1,4 @@
 .vscode
 fulltext
 db/fulltext.db
+*.log

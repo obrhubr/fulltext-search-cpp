@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <sstream>
 #include <vector>
@@ -9,12 +10,24 @@
 #include "db.cpp"
 #include <restbed>
 #include <nlohmann/json.hpp>
+#include <iomanip>
+#include <ctime>
 
 using namespace restbed;
 using json = nlohmann::json;
 
 // create metrics counter
 json metrics;
+// Create logging stream
+std::ofstream logFile;
+
+void log(std::string level, std::string message) {
+    std::time_t t = std::time(nullptr);
+    std::tm tm = *std::localtime(&t);
+
+    logFile << std::put_time(&tm, "%F %T") << " " << level << ": " << message << std::endl;
+    return;
+};
 
 // make db a global variable to access it inside route handlers
 sqlite3 *db;
@@ -43,17 +56,20 @@ void add_handler(const std::shared_ptr<Session> session)
         std::string res = " ";
 
         if(req["bookId"].is_string() && req["bookName"].is_string() && req["text"].is_string()) {
-            std::cout << "Add book in sqlite. " << std::endl;
+            log("info", "Add book in sqlite. ");
             int rc = addBook(db, req["bookId"], req["bookName"], req["text"]);
             if (rc == 0)
             {
+                log("debug", "Saved book to the database. ");
                 res = "{\"response\": \"Saved book to the database. \"}";
             } else {
+                log("error", "Error while saving book to the database. ");
                 res = "{\"response\": \"Error while saving book to the database. \"}";
                 session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
                 return;
             }
         } else {
+            log("debug", "Error while validating input. ");
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
             return;
@@ -92,21 +108,24 @@ void edit_handler(const std::shared_ptr<Session> session)
                     return;
                 }
             }
-            std::cout << "Editing book in sqlite. " << std::endl;
+            log("info", "Editing book in sqlite. ");
             int rc = editBook(db, req["bookId"], req["bookName"], req["text"]);
             
             if (rc == 0)
             {
+                log("debug", "Edited book and saved to the database. ");
                 res = "{\"response\": \"Edited book and saved to the database. \"}";
             } else {
+                log("error", "Error while editing book and saving to the database. ");
                 res = "{\"response\": \"Error while editing book and saving to the database. \"}";
                 session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
                 return;
             }
         } else {
+            log("debug", "Error while validating input. ");
             res = "{\"response\": \"Error while validating input. \"}";
-                session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
-                return;
+            session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
+            return;
         }
 
         session->close(OK, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
@@ -128,18 +147,21 @@ void remove_handler(const std::shared_ptr<Session> session)
         std::string res = " ";
 
         if(req["bookId"].is_string()) {
-            std::cout << "Removing book from sqlite. " << std::endl;
+            log("info", "Removing book from sqlite. ");
             int rc = removeBook(db, req["bookId"]);
 
             if (rc == 0)
             {
+                log("debug", "Removed book from the database. ");
                 res = "{\"response\": \"Removed book from the database. \"}";
             } else {
+                log("error", "Error while removing book from the database. ");
                 res = "{\"response\": \"Error while removing book from the database. \"}";
                 session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
                 return;
             }
         } else {
+            log("debug", "Error while validating input. ");
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
             return;
@@ -160,13 +182,15 @@ void removeAll_handler(const std::shared_ptr<Session> session)
     {
         std::string res = " ";
         
-        std::cout << "Removing all books from sqlite. " << std::endl;
+        log("info", "Removing all books from sqlite. ");
         int rc = removeAllBooks(db);
 
         if (rc == 0)
         {
+            log("debug", "Removed all books from the database. ");
             res = "{\"response\": \"Removed all books from the database. \"}";
         } else {
+            log("error", "Error while removing all books from the database. ");
             res = "{\"response\": \"Error while removing all books from the database. \"}";
             session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
             return;
@@ -191,8 +215,14 @@ void search_one_handler(const std::shared_ptr<Session> session)
         std::string res = " ";
 
         if(req["bookId"].is_string() && req["searchText"].is_string() && req["stopAfterOne"].is_boolean()) {
-            std::cout << "Searching book in sqlite, with term: " << req["searchText"] << std::endl;
-            auto rc = searchBook(db, req["bookId"], req["searchText"], req["stopAfterOne"]);
+            log("info", "Searching book in sqlite, with term: " + req["searchText"].dump());
+            if(!req["periTextLength"].is_number()) {
+                req["periTextLength"] = 15;
+            }
+            if(!req["maxResults"].is_number()) {
+                req["maxResults"] = 50;
+            }
+            auto rc = searchBook(db, req["bookId"], req["searchText"], req["stopAfterOne"], req["periTextLength"], req["maxResults"]);
 
             if (rc.errorCode == 0)
             {
@@ -211,11 +241,13 @@ void search_one_handler(const std::shared_ptr<Session> session)
 
                 res = searchRes.dump();
             } else {
+                log("error", "Error while searching book in the database. ");
                 res = "{\"response\": \"Error while searching book in the database. \"}";
                 session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
                 return;
             }
         } else {
+            log("debug", "Error while validating input. ");
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
             return;
@@ -240,8 +272,14 @@ void search_all_handler(const std::shared_ptr<Session> session)
         std::string res = " ";
 
         if(req["searchText"].is_string() && req["stopAfterOne"].is_boolean()) {
-            std::cout << "Searching all books in sqlite, with term: " << req["searchText"] << std::endl;
-            auto rc = searchAllBooks(db, req["searchText"], req["stopAfterOne"]);
+            log("info", "Searching all books in sqlite, with term: " + req["searchText"].dump());
+            if(!req["periTextLength"].is_number()) {
+                req["periTextLength"] = 15;
+            }
+            if(!req["maxResults"].is_number()) {
+                req["maxResults"] = 50;
+            }
+            auto rc = searchAllBooks(db, req["searchText"], req["stopAfterOne"], req["periTextLength"], req["maxResults"]);
             
             if (rc.errorCode == 0)
             {
@@ -260,12 +298,13 @@ void search_all_handler(const std::shared_ptr<Session> session)
 
                 res = searchRes.dump();
             } else {
+                log("error", "Error while searching books in the database. ");
                 res = "{\"response\": \"Error while searching books in the database. \"}";
                 session->close(500, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
                 return;
             }
         } else {
-            std::cout << "Error while validating input." << std::endl;
+            log("debug", "Error while validating input. ");
             res = "{\"response\": \"Error while validating input. \"}";
             session->close(400, res, {{"Content-Length", std::to_string(res.size())}, {"Content-type", "application/json"}});
             return;
@@ -358,6 +397,9 @@ int main(const int, const char **)
     metrics["remove_count"] = 0;
     metrics["search_all_count"] = 0;
     metrics["search_one_count"] = 0;
+
+    // open file
+    logFile.open("all.log");
 
     // Create and start server
     std::cout << "Starting server on port: " << settings->get_port() << std::endl;;

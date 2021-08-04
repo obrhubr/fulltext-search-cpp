@@ -369,7 +369,7 @@ bool checkWords(std::vector<std::string> splitTextWordList, std::vector<std::str
     return false;
 }
 
-searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne, int minPeriTextLength = 15)
+searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText, int stopAfterOne, int minPeriTextLength = 15, int maxResults = 100000)
 {
     // Function to search for text in a single book
     // @param: db - the database
@@ -397,6 +397,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
     auto searchTextLength = splitSearchText.size();
 
     bool stop = false;
+    int results = 0;
 
     for (int i = 0; i < splitText.size(); i++)
     {
@@ -432,8 +433,15 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
             searchResult sR{bookId, res.results[0].row[1], i, periText};
             sRes.results.push_back(sR);
 
+            results++;
+
             if (stopAfterOne)
             {
+                sRes.errorCode = 0;
+                return sRes;
+            }
+
+            if (results > maxResults) {
                 sRes.errorCode = 0;
                 return sRes;
             }
@@ -444,7 +452,7 @@ searchResults searchBook(sqlite3 *db, std::string bookId, std::string searchText
     return sRes;
 };
 
-searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne, int minPeriTextLength = 15)
+searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfterOne, int minPeriTextLength = 15, int maxResults = 100000)
 {
     // Function to search for text in all book
     // @param: db - the database
@@ -465,7 +473,7 @@ searchResults searchAllBooks(sqlite3 *db, std::string searchText, bool stopAfter
 
     for (auto bookId : res.results)
     {
-        auto res = searchBook(db, bookId.row[0], searchText, stopAfterOne, minPeriTextLength);
+        auto res = searchBook(db, bookId.row[0], searchText, stopAfterOne, minPeriTextLength, maxResults);
         if(res.errorCode == 1) {
             res.errorCode = 1;
             return searchResults;
